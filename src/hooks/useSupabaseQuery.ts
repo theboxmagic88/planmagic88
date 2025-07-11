@@ -9,42 +9,48 @@ export function useSupabaseQuery<T>(
 ) {
   return useQuery<T[]>({
     queryKey: key,
-    staleTime: 30000, // 30 seconds - เพิ่ม stale time เพื่อลด requests
-    gcTime: 300000, // 5 minutes - เก็บ cache นานขึ้น
+    staleTime: 60000, // เพิ่มเป็น 1 นาที
+    gcTime: 600000, // เพิ่มเป็น 10 นาที
+    refetchOnWindowFocus: false, // ปิดการ refetch เมื่อ focus window
+    refetchOnMount: false, // ปิดการ refetch เมื่อ mount ถ้ามี cache
     queryFn: async () => {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // ลดเหลือ 5 วินาที
       
       try {
-      let query = supabase
-        .from(tableName)
-        .select(select || '*')
+        let query = supabase
+          .from(tableName)
+          .select(select || '*')
           .abortSignal(controller.signal)
 
-      if (filters) {
-        Object.entries(filters).forEach(([column, value]) => {
-          if (value !== undefined && value !== null) {
-            query = query.eq(column, value)
-          }
-        })
-      }
+        if (filters) {
+          Object.entries(filters).forEach(([column, value]) => {
+            if (value !== undefined && value !== null) {
+              query = query.eq(column, value)
+            }
+          })
+        }
 
-      const { data, error } = await query
+        const { data, error } = await query
 
-      if (error) throw error
-      return data || []
+        if (error) throw error
+        return data || []
       } finally {
         clearTimeout(timeoutId)
       }
     },
     retry: (failureCount, error) => {
-      // Retry only for network errors, not for auth or permission errors
+      // เพิ่มเงื่อนไข retry
       if (error?.message?.includes('JWT') || error?.message?.includes('permission')) {
         return false
       }
-      return failureCount < 2
+      // Retry สำหรับ network/timeout errors
+      if (error?.message?.includes('timeout') || error?.message?.includes('fetch') || error?.message?.includes('AbortError')) {
+        return failureCount < 3
+      }
+      return failureCount < 1
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000), // เริ่มจาก 500ms
   })
 }
 

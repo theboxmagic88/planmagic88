@@ -8,68 +8,128 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    flowType: 'pkce',
-    debug: false // ปิด debug เพื่อลด log
+    flowType: 'implicit', // เปลี่ยนจาก pkce เป็น implicit เพื่อความเร็ว
+    debug: false,
+    storageKey: 'transport-planner-auth'
   },
   global: {
     headers: {
-      'X-Client-Info': 'transport-planner@1.0.0'
+      'X-Client-Info': 'transport-planner@1.0.0',
+      'Cache-Control': 'no-cache'
     }
   },
   db: {
-    schema: 'public'
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 5 // ลดจำนวน events เพื่อประสิทธิภาพ
+    schema: 'public',
+    // เพิ่ม connection pooling
+    pool: {
+      max: 10,
+      min: 2,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000
     }
   },
-  // เพิ่ม connection pooling และ timeout settings
-  fetch: (url, options = {}) => {
-    return fetch(url, {
-      ...options,
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    })
+  realtime: {
+    // ปิด realtime ชั่วคราวเพื่อลด load
+    enabled: false,
+    params: {
+      eventsPerSecond: 2
+    }
+  },
+  // ลด timeout และเพิ่ม retry logic
+  fetch: async (url, options = {}) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000) // ลดเหลือ 3 วินาที
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options.headers,
+          'Connection': 'keep-alive',
+          'Keep-Alive': 'timeout=5, max=1000'
+        }
+      })
+      
+      clearTimeout(timeoutId)
+      return response
+    } catch (error) {
+      clearTimeout(timeoutId)
+      
+      // Retry logic สำหรับ network errors
+      if (error.name === 'AbortError' || error.message.includes('fetch')) {
+        console.warn('Network error, retrying...', error.message)
+        // Retry หนึ่งครั้งด้วย timeout ที่สั้นกว่า
+        const retryController = new AbortController()
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 2000)
+        
+        try {
+          const retryResponse = await fetch(url, {
+            ...options,
+            signal: retryController.signal
+          })
+          clearTimeout(retryTimeoutId)
+          return retryResponse
+        } catch (retryError) {
+          clearTimeout(retryTimeoutId)
+          throw retryError
+        }
+      }
+      
+      throw error
+    }
   }
 })
 
-// Test connection on initialization
-const testConnection = async () => {
+// ปรับปรุง connection test ให้เร็วขึ้น
+let connectionTested = false
+
+const testConnection = async (skipCache = false) => {
+  if (connectionTested && !skipCache) {
+    return true
+  }
+  
   try {
-    console.log('Testing Supabase connection...')
+    console.log('Testing Supabase connection (quick test)...')
     
-    // Test basic connectivity with shorter timeout
-    const { data, error } = await supabase
-      .from('users')
-      .select('count', { count: 'exact', head: true })
-      .limit(1)
-      .abortSignal(AbortSignal.timeout(5000)) // 5 second timeout
+    // ใช้ health check endpoint แทน
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
     
-    if (error) {
-      console.error('Supabase connection test failed:', error.message)
+    try {
+      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'HEAD',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        signal: controller.signal
+      })
       
-      // If users table doesn't exist, that's expected for new setup
-      if (error.code === '42P01') {
-        console.log('Users table not found - this is expected for new setup')
-        return
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        console.log('Supabase connection successful')
+        connectionTested = true
+        return true
+      } else {
+        console.warn('Supabase connection warning:', response.status)
+        return false
       }
-    } else {
-      console.log('Supabase connection successful')
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      throw fetchError
     }
   } catch (error) {
-    console.error('Supabase connection error:', error)
-    // Don't throw error to prevent app from breaking
+    console.error('Supabase connection test failed:', error.message)
+    return false
   }
 }
 
-// Test connection with timeout
-Promise.race([
-  testConnection(),
-  new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Connection test timeout')), 3000) // ลด timeout
-  )
-]).catch(error => {
-  console.warn('Connection test failed or timed out:', error.message)
+// เรียก test connection แบบ non-blocking
+testConnection().catch(error => {
+  console.warn('Initial connection test failed:', error.message)
+  console.log('App will continue to load, connection will be retried when needed')
 })
 
 // Re-export types from the declaration file

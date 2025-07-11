@@ -10,66 +10,78 @@ export function useAuth() {
 
   useEffect(() => {
     let mounted = true
-    let timeoutId: NodeJS.Timeout | null = null
+    let authTimeoutId: NodeJS.Timeout | null = null
+    let retryCount = 0
+    const maxRetries = 3
     
-    // Initialize auth immediately without waiting for session
+    // ปรับปรุง auth initialization
     const initAuth = async () => {
       try {
-        console.log('Initializing authentication...')
+        console.log(`Initializing authentication (attempt ${retryCount + 1}/${maxRetries})...`)
         
-        // Set a shorter timeout to prevent infinite loading
-        timeoutId = setTimeout(() => {
+        // ลด timeout เหลือ 3 วินาที
+        authTimeoutId = setTimeout(() => {
           if (mounted && loading) {
-            console.log('Auth timeout reached, proceeding without authentication')
+            console.log('Auth timeout reached, will retry or proceed without auth')
             setLoading(false)
-            setError('Database connection timeout. Please check your connection.')
+            if (retryCount < maxRetries - 1) {
+              retryCount++
+              setTimeout(() => initAuth(), 1000) // retry หลัง 1 วินาที
+            } else {
+              setError('Database connection timeout. Please check your connection.')
+            }
           }
-        }, 5000) // ลด timeout เหลือ 5 วินาที
+        }, 3000)
         
-        // เพิ่ม retry mechanism
-        let retryCount = 0
-        const maxRetries = 3
+        // ลองเชื่อมต่อแบบง่ายๆ ก่อน
         let session = null
         let sessionError = null
         
-        while (retryCount < maxRetries && !session && !sessionError) {
-          try {
-            const result = await Promise.race([
-              supabase.auth.getSession(),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Session timeout')), 3000)
-              )
-            ]) as any
-            
-            session = result.data?.session
-            sessionError = result.error
-            break
-          } catch (error) {
-            retryCount++
-            console.log(`Session attempt ${retryCount} failed, retrying...`)
-            if (retryCount < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000)) // รอ 1 วินาทีก่อน retry
-            }
-          }
+        try {
+          // ใช้ timeout ที่สั้นกว่า
+          const result = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Session timeout')), 2000)
+            )
+          ]) as any
+          
+          session = result.data?.session
+          sessionError = result.error
+        } catch (timeoutError) {
+          console.warn('Session retrieval timed out:', timeoutError.message)
+          sessionError = timeoutError
         }
 
         if (!mounted) return
         
-        // Clear timeout if we get a response
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
+        // Clear timeout
+        if (authTimeoutId) {
+          clearTimeout(authTimeoutId)
+          authTimeoutId = null
         }
 
         if (sessionError) {
-          console.error('Session error:', sessionError)
-          setError(`Authentication error: ${sessionError.message}`)
+          console.error('Session error:', sessionError.message)
+          
+          // ถ้าเป็น timeout หรือ network error ให้ retry
+          if (sessionError.message.includes('timeout') || sessionError.message.includes('fetch')) {
+            if (retryCount < maxRetries - 1) {
+              retryCount++
+              console.log(`Retrying auth in 2 seconds... (${retryCount}/${maxRetries})`)
+              setTimeout(() => initAuth(), 2000)
+              return
+            }
+          }
+          
+          setError(`Connection error: ${sessionError.message}`)
           setLoading(false)
           return
         }
 
-        console.log('Session retrieved:', session ? 'Found' : 'None')
+        console.log('Session retrieved successfully:', session ? 'Found' : 'None')
         setSession(session)
+        setError(null) // Clear any previous errors
         
         if (session?.user) {
           console.log('User found in session:', session.user.email)
@@ -81,13 +93,13 @@ export function useAuth() {
       } catch (error: any) {
         console.error('Auth initialization error:', error)
         if (mounted) {
-          setError(`Connection error: ${error.message || 'Unable to connect to database'}`)
+          setError(`Connection error: ${error.message || 'Unable to connect to database. Please try refreshing the page.'}`)
           setLoading(false)
         }
       } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
+        if (authTimeoutId) {
+          clearTimeout(authTimeoutId)
+          authTimeoutId = null
         }
       }
     }
@@ -115,8 +127,8 @@ export function useAuth() {
 
     return () => {
       mounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
+      if (authTimeoutId) {
+        clearTimeout(authTimeoutId)
       }
       subscription.unsubscribe()
     }
