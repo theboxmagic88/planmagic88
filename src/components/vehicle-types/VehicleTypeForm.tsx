@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 const vehicleTypeSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  capacity: z.number().min(1, 'Capacity must be at least 1').optional(),
+  max_weight_tons: z.number().min(0.1, 'Weight must be at least 0.1 tons').optional(),
 })
 
 type VehicleTypeFormData = z.infer<typeof vehicleTypeSchema>
@@ -18,7 +18,7 @@ interface VehicleType {
   id: string
   name: string
   description?: string
-  capacity?: number
+  max_weight_tons?: number
 }
 
 interface VehicleTypeFormProps {
@@ -44,7 +44,7 @@ export function VehicleTypeForm({ vehicleType, onClose }: VehicleTypeFormProps) 
     defaultValues: {
       name: vehicleType?.name || '',
       description: vehicleType?.description || '',
-      capacity: vehicleType?.capacity || undefined,
+      max_weight_tons: vehicleType?.max_weight_tons || undefined,
     },
   })
 
@@ -123,19 +123,20 @@ export function VehicleTypeForm({ vehicleType, onClose }: VehicleTypeFormProps) 
           </div>
 
           <div>
-            <label htmlFor="capacity" className="block text-sm font-medium text-gray-700 mb-2">
-              Capacity (passengers)
+            <label htmlFor="max_weight_tons" className="block text-sm font-medium text-gray-700 mb-2">
+              Maximum Weight (tons)
             </label>
             <input
-              {...register('capacity', { valueAsNumber: true })}
+              {...register('max_weight_tons', { valueAsNumber: true })}
               type="number"
-              id="capacity"
-              min="1"
+              id="max_weight_tons"
+              min="0.1"
+              step="0.1"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter passenger capacity"
+              placeholder="Enter maximum weight in tons (optional)"
             />
-            {errors.capacity && (
-              <p className="mt-1 text-sm text-red-600">{errors.capacity.message}</p>
+            {errors.max_weight_tons && (
+              <p className="mt-1 text-sm text-red-600">{errors.max_weight_tons.message}</p>
             )}
           </div>
 

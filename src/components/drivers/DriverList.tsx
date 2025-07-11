@@ -24,7 +24,8 @@ export function DriverList() {
 
   const { data: drivers, isLoading } = useSupabaseQuery<Driver>(
     ['drivers'],
-    'drivers'
+    'drivers',
+    '*, license_type:license_types(license_code, name, description)'
   )
 
   const { delete: deleteDriver } = useSupabaseMutation<Driver>(
@@ -88,6 +89,21 @@ export function DriverList() {
         <div className="flex items-center gap-2">
           <Mail className="h-4 w-4 text-gray-400" />
           <span className="text-sm text-gray-900">{value || 'Not provided'}</span>
+        </div>
+      ),
+      sortable: true,
+    },
+    {
+      key: 'license_type' as keyof Driver,
+      header: 'License Type',
+      render: (value: any, row: Driver) => (
+        <div>
+          <div className="font-medium text-gray-900">
+            {row.license_type?.license_code || 'Not provided'}
+          </div>
+          <div className="text-sm text-gray-500">
+            {row.license_type?.name || 'No license type'}
+          </div>
         </div>
       ),
       sortable: true,

@@ -6,9 +6,15 @@ export interface Driver {
   phone?: string
   email?: string
   license_number?: string
+  license_type_id?: string
   status: 'Active' | 'Inactive' | 'Suspended'
   created_at: string
   updated_at: string
+  license_type?: {
+    license_code: string
+    name: string
+    description?: string
+  }
 }
 
 export interface Vehicle {
@@ -16,12 +22,13 @@ export interface Vehicle {
   vehicle_code: string
   plate_number: string
   vehicle_type_id?: string
-  brand?: string
-  model?: string
-  year?: number
   status: 'Active' | 'Inactive' | 'Maintenance'
   created_at: string
   updated_at: string
+  vehicle_type?: {
+    name: string
+    max_weight_tons?: number
+  }
 }
 
 export interface Customer {
@@ -47,6 +54,10 @@ export interface Route {
   destination_name?: string
   origin_coordinates?: string
   destination_coordinates?: string
+  origin_latitude?: number
+  origin_longitude?: number
+  destination_latitude?: number
+  destination_longitude?: number
   estimated_distance_km?: number
   estimated_duration_minutes?: number
   default_standby_time?: string
@@ -59,6 +70,16 @@ export interface Route {
   customer?: Customer
 }
 
+export interface LicenseType {
+  id: string
+  license_code: string
+  name: string
+  description?: string
+  vehicle_type_ids: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 export interface RouteSchedule {
   id: string
   route_id: string
@@ -125,7 +146,7 @@ export interface VehicleType {
   id: string
   name: string
   description?: string
-  capacity?: number
+  max_weight_tons?: number
   created_at: string
   updated_at: string
 }

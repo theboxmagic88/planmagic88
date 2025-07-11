@@ -1,17 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2 } from 'lucide-react'
 import { useSupabaseQuery, useSupabaseMutation } from '../../hooks/useSupabaseQuery'
+import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 
 const vehicleSchema = z.object({
   plate_number: z.string().min(1, 'Plate number is required'),
   vehicle_type_id: z.string().optional(),
-  brand: z.string().optional(),
-  model: z.string().optional(),
-  year: z.number().min(1900).max(new Date().getFullYear() + 1).optional(),
   status: z.enum(['Active', 'Inactive', 'Maintenance']),
 })
 
@@ -22,9 +20,6 @@ interface Vehicle {
   vehicle_code: string
   plate_number: string
   vehicle_type_id?: string
-  brand?: string
-  model?: string
-  year?: number
   status: 'Active' | 'Inactive' | 'Maintenance'
 }
 
@@ -35,6 +30,7 @@ interface VehicleFormProps {
 
 export function VehicleForm({ vehicle, onClose }: VehicleFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDuplicateChecking, setIsDuplicateChecking] = useState(false)
   const isEditing = !!vehicle
 
   const { data: vehicleTypes } = useSupabaseQuery<any>(
@@ -50,18 +46,53 @@ export function VehicleForm({ vehicle, onClose }: VehicleFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
+    setError,
+    clearErrors,
   } = useForm<VehicleFormData>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
       plate_number: vehicle?.plate_number || '',
       vehicle_type_id: vehicle?.vehicle_type_id || '',
-      brand: vehicle?.brand || '',
-      model: vehicle?.model || '',
-      year: vehicle?.year || undefined,
       status: vehicle?.status || 'Active',
     },
   })
+
+  const watchPlateNumber = watch('plate_number')
+
+  // ตรวจสอบ duplicate vehicle
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!watchPlateNumber) return
+      
+      setIsDuplicateChecking(true)
+      try {
+        const { data, error } = await supabase.rpc('check_duplicate_vehicle', {
+          p_plate_number: watchPlateNumber,
+          p_vehicle_id: vehicle?.id || null
+        })
+        
+        if (error) throw error
+        
+        if (data) {
+          setError('plate_number', { 
+            type: 'manual', 
+            message: 'Vehicle with this plate number already exists' 
+          })
+        } else {
+          clearErrors('plate_number')
+        }
+      } catch (error) {
+        console.error('Error checking duplicate:', error)
+      } finally {
+        setIsDuplicateChecking(false)
+      }
+    }
+
+    const timeoutId = setTimeout(checkDuplicate, 500)
+    return () => clearTimeout(timeoutId)
+  }, [watchPlateNumber, vehicle?.id, setError, clearErrors])
 
   const onSubmit = async (data: VehicleFormData) => {
     try {
@@ -109,13 +140,20 @@ export function VehicleForm({ vehicle, onClose }: VehicleFormProps) {
             <label htmlFor="plate_number" className="block text-sm font-medium text-gray-700 mb-2">
               Plate Number *
             </label>
-            <input
-              {...register('plate_number')}
-              type="text"
-              id="plate_number"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter plate number"
-            />
+            <div className="relative">
+              <input
+                {...register('plate_number')}
+                type="text"
+                id="plate_number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter plate number"
+              />
+              {isDuplicateChecking && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                </div>
+              )}
+            </div>
             {errors.plate_number && (
               <p className="mt-1 text-sm text-red-600">{errors.plate_number.message}</p>
             )}
@@ -139,56 +177,6 @@ export function VehicleForm({ vehicle, onClose }: VehicleFormProps) {
             </select>
             {errors.vehicle_type_id && (
               <p className="mt-1 text-sm text-red-600">{errors.vehicle_type_id.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="brand" className="block text-sm font-medium text-gray-700 mb-2">
-              Brand
-            </label>
-            <input
-              {...register('brand')}
-              type="text"
-              id="brand"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter brand"
-            />
-            {errors.brand && (
-              <p className="mt-1 text-sm text-red-600">{errors.brand.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-2">
-              Model
-            </label>
-            <input
-              {...register('model')}
-              type="text"
-              id="model"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter model"
-            />
-            {errors.model && (
-              <p className="mt-1 text-sm text-red-600">{errors.model.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-2">
-              Year
-            </label>
-            <input
-              {...register('year', { valueAsNumber: true })}
-              type="number"
-              id="year"
-              min="1900"
-              max={new Date().getFullYear() + 1}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter year"
-            />
-            {errors.year && (
-              <p className="mt-1 text-sm text-red-600">{errors.year.message}</p>
             )}
           </div>
 

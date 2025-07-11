@@ -68,11 +68,11 @@ export function VehicleTypeList() {
       sortable: true,
     },
     {
-      key: 'capacity' as keyof VehicleType,
-      header: 'Capacity',
+      key: 'max_weight_tons' as keyof VehicleType,
+      header: 'Max Weight',
       render: (value: any) => (
         <div className="text-sm text-gray-900">
-          {value ? `${value} passengers` : 'Not specified'}
+          {value ? `${value} tons` : 'Not specified'}
         </div>
       ),
       sortable: true,

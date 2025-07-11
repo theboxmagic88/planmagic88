@@ -10,29 +10,56 @@ export function useAuth() {
 
   useEffect(() => {
     let mounted = true
-    let timeoutId: NodeJS.Timeout
+    let timeoutId: NodeJS.Timeout | null = null
     
     // Initialize auth immediately without waiting for session
     const initAuth = async () => {
       try {
         console.log('Initializing authentication...')
         
-        // Set a timeout to prevent infinite loading
+        // Set a shorter timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (mounted && loading) {
             console.log('Auth timeout reached, proceeding without authentication')
             setLoading(false)
             setError('Database connection timeout. Please check your connection.')
           }
-        }, 10000) // 10 second timeout
+        }, 5000) // ลด timeout เหลือ 5 วินาที
         
-        // Get session without timeout to prevent premature failures
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        // เพิ่ม retry mechanism
+        let retryCount = 0
+        const maxRetries = 3
+        let session = null
+        let sessionError = null
+        
+        while (retryCount < maxRetries && !session && !sessionError) {
+          try {
+            const result = await Promise.race([
+              supabase.auth.getSession(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Session timeout')), 3000)
+              )
+            ]) as any
+            
+            session = result.data?.session
+            sessionError = result.error
+            break
+          } catch (error) {
+            retryCount++
+            console.log(`Session attempt ${retryCount} failed, retrying...`)
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000)) // รอ 1 วินาทีก่อน retry
+            }
+          }
+        }
 
         if (!mounted) return
         
         // Clear timeout if we get a response
-        clearTimeout(timeoutId)
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
 
         if (sessionError) {
           console.error('Session error:', sessionError)
@@ -60,6 +87,7 @@ export function useAuth() {
       } finally {
         if (timeoutId) {
           clearTimeout(timeoutId)
+          timeoutId = null
         }
       }
     }

@@ -10,7 +10,8 @@ const driverSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   phone: z.string().optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  license_number: z.string().optional(),
+  license_number: z.string().min(1, 'License number is required'),
+  license_type_id: z.string().min(1, 'License type is required'),
   status: z.enum(['Active', 'Inactive', 'Suspended']),
 })
 
@@ -23,6 +24,7 @@ interface Driver {
   phone?: string
   email?: string
   license_number?: string
+  license_type_id?: string
   status: 'Active' | 'Inactive' | 'Suspended'
 }
 
@@ -33,7 +35,15 @@ interface DriverFormProps {
 
 export function DriverForm({ driver, onClose }: DriverFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDuplicateChecking, setIsDuplicateChecking] = useState(false)
   const isEditing = !!driver
+
+  const { data: licenseTypes } = useSupabaseQuery<any>(
+    ['license-types'],
+    'license_types',
+    '*',
+    { is_active: true }
+  )
 
   const { insert, update } = useSupabaseMutation<Driver>(
     'drivers',
@@ -43,7 +53,10 @@ export function DriverForm({ driver, onClose }: DriverFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
+    setError,
+    clearErrors,
   } = useForm<DriverFormData>({
     resolver: zodResolver(driverSchema),
     defaultValues: {
@@ -51,9 +64,47 @@ export function DriverForm({ driver, onClose }: DriverFormProps) {
       phone: driver?.phone || '',
       email: driver?.email || '',
       license_number: driver?.license_number || '',
+      license_type_id: driver?.license_type_id || '',
       status: driver?.status || 'Active',
     },
   })
+
+  const watchName = watch('name')
+  const watchLicenseNumber = watch('license_number')
+
+  // ตรวจสอบ duplicate driver
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!watchName || !watchLicenseNumber) return
+      
+      setIsDuplicateChecking(true)
+      try {
+        const { data, error } = await supabase.rpc('check_duplicate_driver', {
+          p_name: watchName,
+          p_license_number: watchLicenseNumber,
+          p_driver_id: driver?.id || null
+        })
+        
+        if (error) throw error
+        
+        if (data) {
+          setError('name', { 
+            type: 'manual', 
+            message: 'Driver with this name and license number already exists' 
+          })
+        } else {
+          clearErrors('name')
+        }
+      } catch (error) {
+        console.error('Error checking duplicate:', error)
+      } finally {
+        setIsDuplicateChecking(false)
+      }
+    }
+
+    const timeoutId = setTimeout(checkDuplicate, 500)
+    return () => clearTimeout(timeoutId)
+  }, [watchName, watchLicenseNumber, driver?.id, setError, clearErrors])
 
   const onSubmit = async (data: DriverFormData) => {
     try {
@@ -146,16 +197,44 @@ export function DriverForm({ driver, onClose }: DriverFormProps) {
           </div>
 
           <div>
-            <label htmlFor="license_number" className="block text-sm font-medium text-gray-700 mb-2">
-              License Number
+            <label htmlFor="license_type_id" className="block text-sm font-medium text-gray-700 mb-2">
+              License Type *
             </label>
-            <input
-              {...register('license_number')}
-              type="text"
-              id="license_number"
+            <select
+              {...register('license_type_id')}
+              id="license_type_id"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter license number"
-            />
+            >
+              <option value="">Select license type</option>
+              {licenseTypes?.map((type: any) => (
+                <option key={type.id} value={type.id}>
+                  {type.license_code} - {type.name}
+                </option>
+              ))}
+            </select>
+            {errors.license_type_id && (
+              <p className="mt-1 text-sm text-red-600">{errors.license_type_id.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="license_number" className="block text-sm font-medium text-gray-700 mb-2">
+              License Number *
+            </label>
+            <div className="relative">
+              <input
+                {...register('license_number')}
+                type="text"
+                id="license_number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter license number"
+              />
+              {isDuplicateChecking && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                </div>
+              )}
+            </div>
             {errors.license_number && (
               <p className="mt-1 text-sm text-red-600">{errors.license_number.message}</p>
             )}

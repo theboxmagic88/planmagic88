@@ -29,7 +29,7 @@ export function VehicleList() {
   const { data: vehicles, isLoading } = useSupabaseQuery<Vehicle>(
     ['vehicles'],
     'vehicles',
-    '*, vehicle_type:vehicle_types(name)'
+    '*, vehicle_type:vehicle_types(name, max_weight_tons)'
   )
 
   const { delete: deleteVehicle } = useSupabaseMutation<Vehicle>(
@@ -86,21 +86,17 @@ export function VehicleList() {
       sortable: true,
     },
     {
-      key: 'brand' as keyof Vehicle,
-      header: 'Brand & Model',
+      key: 'vehicle_type' as keyof Vehicle,
+      header: 'Type & Weight',
       render: (value: any, row: Vehicle) => (
         <div>
-          <div className="font-medium text-gray-900">{value || 'Unknown'}</div>
-          <div className="text-sm text-gray-500">{row.model || 'Unknown'}</div>
+          <div className="font-medium text-gray-900">
+            {row.vehicle_type?.name || 'Unknown'}
+          </div>
+          <div className="text-sm text-gray-500">
+            {row.vehicle_type?.max_weight_tons ? `${row.vehicle_type.max_weight_tons} tons` : 'Weight not specified'}
+          </div>
         </div>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'year' as keyof Vehicle,
-      header: 'Year',
-      render: (value: any) => (
-        <div className="text-sm text-gray-900">{value || 'Unknown'}</div>
       ),
       sortable: true,
     },
