@@ -9,7 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
     flowType: 'pkce',
-    debug: true
+    debug: false // ปิด debug เพื่อลด log
   },
   global: {
     headers: {
@@ -21,8 +21,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 10
+      eventsPerSecond: 5 // ลดจำนวน events เพื่อประสิทธิภาพ
     }
+  },
+  // เพิ่ม connection pooling และ timeout settings
+  fetch: (url, options = {}) => {
+    return fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    })
   }
 })
 
@@ -31,11 +38,12 @@ const testConnection = async () => {
   try {
     console.log('Testing Supabase connection...')
     
-    // First test basic connectivity
+    // Test basic connectivity with shorter timeout
     const { data, error } = await supabase
       .from('users')
       .select('count', { count: 'exact', head: true })
       .limit(1)
+      .abortSignal(AbortSignal.timeout(5000)) // 5 second timeout
     
     if (error) {
       console.error('Supabase connection test failed:', error.message)
@@ -58,7 +66,7 @@ const testConnection = async () => {
 Promise.race([
   testConnection(),
   new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Connection test timeout')), 5000)
+    setTimeout(() => reject(new Error('Connection test timeout')), 3000) // ลด timeout
   )
 ]).catch(error => {
   console.warn('Connection test failed or timed out:', error.message)

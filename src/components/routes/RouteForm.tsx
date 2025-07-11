@@ -12,6 +12,10 @@ const routeSchema = z.object({
   customer_id: z.string().optional(),
   origin_name: z.string().optional(),
   destination_name: z.string().optional(),
+  origin_latitude: z.number().min(-90).max(90).optional(),
+  origin_longitude: z.number().min(-180).max(180).optional(),
+  destination_latitude: z.number().min(-90).max(90).optional(),
+  destination_longitude: z.number().min(-180).max(180).optional(),
   estimated_distance_km: z.number().min(0).optional(),
   estimated_duration_minutes: z.number().min(0).optional(),
   default_standby_time: z.string().optional(),
@@ -31,6 +35,10 @@ interface Route {
   customer_id?: string
   origin_name?: string
   destination_name?: string
+  origin_latitude?: number
+  origin_longitude?: number
+  destination_latitude?: number
+  destination_longitude?: number
   estimated_distance_km?: number
   estimated_duration_minutes?: number
   default_standby_time?: string
@@ -71,6 +79,10 @@ export function RouteForm({ route, onClose }: RouteFormProps) {
       customer_id: route?.customer_id || '',
       origin_name: route?.origin_name || '',
       destination_name: route?.destination_name || '',
+      origin_latitude: route?.origin_latitude || undefined,
+      origin_longitude: route?.origin_longitude || undefined,
+      destination_latitude: route?.destination_latitude || undefined,
+      destination_longitude: route?.destination_longitude || undefined,
       estimated_distance_km: route?.estimated_distance_km || undefined,
       estimated_duration_minutes: route?.estimated_duration_minutes || undefined,
       default_standby_time: route?.default_standby_time || '',
@@ -197,6 +209,86 @@ export function RouteForm({ route, onClose }: RouteFormProps) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter destination location"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="origin_latitude" className="block text-sm font-medium text-gray-700 mb-2">
+                Origin Latitude
+              </label>
+              <input
+                {...register('origin_latitude', { valueAsNumber: true })}
+                type="number"
+                step="0.000001"
+                min="-90"
+                max="90"
+                id="origin_latitude"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. 13.980462656472039"
+              />
+              {errors.origin_latitude && (
+                <p className="mt-1 text-sm text-red-600">{errors.origin_latitude.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="origin_longitude" className="block text-sm font-medium text-gray-700 mb-2">
+                Origin Longitude
+              </label>
+              <input
+                {...register('origin_longitude', { valueAsNumber: true })}
+                type="number"
+                step="0.000001"
+                min="-180"
+                max="180"
+                id="origin_longitude"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. 100.62443258942143"
+              />
+              {errors.origin_longitude && (
+                <p className="mt-1 text-sm text-red-600">{errors.origin_longitude.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="destination_latitude" className="block text-sm font-medium text-gray-700 mb-2">
+                Destination Latitude
+              </label>
+              <input
+                {...register('destination_latitude', { valueAsNumber: true })}
+                type="number"
+                step="0.000001"
+                min="-90"
+                max="90"
+                id="destination_latitude"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. 14.016792339957583"
+              />
+              {errors.destination_latitude && (
+                <p className="mt-1 text-sm text-red-600">{errors.destination_latitude.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="destination_longitude" className="block text-sm font-medium text-gray-700 mb-2">
+                Destination Longitude
+              </label>
+              <input
+                {...register('destination_longitude', { valueAsNumber: true })}
+                type="number"
+                step="0.000001"
+                min="-180"
+                max="180"
+                id="destination_longitude"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. 100.71744123271667"
+              />
+              {errors.destination_longitude && (
+                <p className="mt-1 text-sm text-red-600">{errors.destination_longitude.message}</p>
+              )}
             </div>
           </div>
 

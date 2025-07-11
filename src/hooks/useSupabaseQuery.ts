@@ -9,10 +9,17 @@ export function useSupabaseQuery<T>(
 ) {
   return useQuery<T[]>({
     queryKey: key,
+    staleTime: 30000, // 30 seconds - เพิ่ม stale time เพื่อลด requests
+    gcTime: 300000, // 5 minutes - เก็บ cache นานขึ้น
     queryFn: async () => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      
+      try {
       let query = supabase
         .from(tableName)
         .select(select || '*')
+          .abortSignal(controller.signal)
 
       if (filters) {
         Object.entries(filters).forEach(([column, value]) => {
@@ -26,7 +33,18 @@ export function useSupabaseQuery<T>(
 
       if (error) throw error
       return data || []
+      } finally {
+        clearTimeout(timeoutId)
+      }
     },
+    retry: (failureCount, error) => {
+      // Retry only for network errors, not for auth or permission errors
+      if (error?.message?.includes('JWT') || error?.message?.includes('permission')) {
+        return false
+      }
+      return failureCount < 2
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
